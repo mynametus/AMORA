@@ -1,0 +1,185 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatar    String?
+  password  String?  // nullable for OAuth users
+  language  String   @default("en")
+  emailVerified Boolean @default(false)
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  preferences UserPreferences?
+  subscriptions Subscription[]
+  characters Character[]
+  chats Chat[]
+  memories Memory[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@map("users")
+}
+
+model UserPreferences {
+  id String @id @default(cuid())
+  userId String @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  preferredThemes String[] @default([])
+  sweetnessLevel String @default("sweet") // sweet, serious, playful
+  contentMaturity String @default("safe") // safe, mature, explicit
+
+  // Notification settings
+  checkIns Boolean @default(true)
+  reminders Boolean @default(true)
+  updates Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model Character {
+  id String @id @default(cuid())
+  name String
+  description String @db.Text
+  avatar String
+  archetype String
+  personality Json // PersonalityTraits
+  voice Json // VoiceSettings
+  boundaries Json // CharacterBoundaries
+  creatorId String?
+  creator User? @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  isPublic Boolean @default(false)
+  isPremium Boolean @default(false)
+  tags String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  chats Chat[]
+  memories Memory[]
+
+  @@map("characters")
+  @@index([archetype])
+  @@index([isPublic, isPremium])
+}
+
+model Chat {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  characterId String
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  title String?
+  scene Json? // SceneContext
+  lastMessageAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  messages Message[]
+  memories Memory[]
+
+  @@map("chats")
+  @@index([userId])
+  @@index([characterId])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id String @id @default(cuid())
+  chatId String
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  role String // user, assistant, system
+  content String @db.Text
+  imageUrl String?
+  metadata Json?
+  createdAt DateTime @default(now())
+
+  @@map("messages")
+  @@index([chatId, createdAt])
+}
+
+model Memory {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  characterId String?
+  character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  chatId String?
+  chat Chat? @relation(fields: [chatId], references: [id], onDelete: SetNull)
+  type String // fact, preference, event, quote, milestone
+  content String @db.Text
+  importance Int @default(50) // 0-100
+  embedding String? // JSON array of numbers
+  metadata Json?
+  createdAt DateTime @default(now())
+  lastAccessedAt DateTime @default(now())
+
+  @@map("memories")
+  @@index([userId, characterId])
+  @@index([type, importance])
+  @@index([lastAccessedAt])
+}
+
+model MemorySummary {
+  id String @id @default(cuid())
+  userId String
+  characterId String?
+  summary String @db.Text
+  keyFacts String[]
+  lastUpdated DateTime @default(now())
+
+  @@unique([userId, characterId])
+  @@map("memory_summaries")
+  @@index([userId])
+}
+
+model Subscription {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier String // free, premium_weekly, premium_monthly, premium_annual
+  status String // active, cancelled, expired, trial
+  startDate DateTime @default(now())
+  endDate DateTime?
+  cancelAtPeriodEnd Boolean @default(false)
+  stripeSubscriptionId String? @unique
+  stripeCustomerId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subscriptions")
+  @@index([userId, status])
+  @@index([stripeSubscriptionId])
+}
+
+model AnalyticsEvent {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event String
+  properties Json?
+  timestamp DateTime @default(now())
+
+  @@map("analytics_events")
+  @@index([userId, timestamp])
+  @@index([event, timestamp])
+}
+
